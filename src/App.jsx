@@ -352,14 +352,14 @@ function MoreTab({t,toggleDark,log,userName,setUserName}){
     );
   }
 
+  const [measInputs,setMeasInputs]=useState({});
   if(view==="measurements"){
     const fields=["Chest","Waist","Hips","Left arm","Right arm","Left thigh","Right thigh"];
-    const [inputs,setInputs]=useState({});
     const logMeasurements=()=>{
       const today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-      const entry={date:today,...inputs};
+      const entry={date:today,...measInputs};
       setMeasurements(prev=>[entry,...prev.filter(e=>e.date!==today)]);
-      setInputs({});
+      setMeasInputs({});
     };
     return(
       <div style={{padding:"0 16px 100px",maxWidth:480,margin:"0 auto"}}>
@@ -370,7 +370,7 @@ function MoreTab({t,toggleDark,log,userName,setUserName}){
           {fields.map(f=>(
             <div key={f} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
               <span style={{fontSize:13,fontWeight:600,color:t.text}}>{f}</span>
-              <input type="text" inputMode="decimal" value={inputs[f]||""} onChange={e=>setInputs(p=>({...p,[f]:e.target.value}))} placeholder="0 cm"
+              <input type="text" inputMode="decimal" value={measInputs[f]||""} onChange={e=>setMeasInputs(p=>({...p,[f]:e.target.value}))} placeholder="0 cm"
                 style={{width:80,padding:"6px 10px",borderRadius:10,border:`1px solid ${t.border}`,fontSize:14,color:t.text,background:t.bg,outline:"none",textAlign:"center"}}/>
             </div>
           ))}
