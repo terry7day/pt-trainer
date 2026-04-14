@@ -164,6 +164,31 @@ function Sparkline({data,color,w=120,h=40}){
   return(<svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}><polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>);
 }
 
+// ── Set Input Row ────────────────────────────────────────────────────────────
+const SetRow=({s,i,t,onWeight,onReps,onBW,onDone,onWarmup,onRemove})=>{
+  const [w,setW]=useState(s.weight||"");
+  const [r,setR]=useState(s.reps||"");
+  useEffect(()=>{setW(s.weight||"");},[s.weight]);
+  useEffect(()=>{setR(s.reps||"");},[s.reps]);
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"24px 1fr 1fr 36px 36px 36px 24px",gap:4,marginBottom:6,alignItems:"center",background:s.warmup?(t.dark?"#1e293b":"#fef9c3"):s.done?(t.dark?"#14532d":"#f0fdf4"):t.bg,borderRadius:10,padding:"6px 4px",opacity:s.warmup?0.8:1}}>
+      <div style={{textAlign:"center",fontSize:12,fontWeight:700,color:s.warmup?"#f59e0b":t.muted}}>{s.warmup?"W":i+1}</div>
+      <input disabled={s.bodyweight} type="text" inputMode="decimal" placeholder={s.bodyweight?"BW":"0"} value={w}
+        onChange={e=>setW(e.target.value)}
+        onBlur={()=>onWeight(w)}
+        style={{padding:"6px",borderRadius:8,border:`1px solid ${t.border}`,fontSize:13,textAlign:"center",background:s.bodyweight?(t.dark?"#0f172a":"#f1f5f9"):t.card,color:t.text,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+      <input type="text" inputMode="numeric" placeholder="0" value={r}
+        onChange={e=>setR(e.target.value)}
+        onBlur={()=>onReps(r)}
+        style={{padding:"6px",borderRadius:8,border:`1px solid ${t.border}`,fontSize:13,textAlign:"center",background:t.card,color:t.text,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+      <button onClick={onBW} style={{height:30,borderRadius:8,border:`1px solid ${s.bodyweight?"#3b82f6":t.border}`,fontSize:10,fontWeight:700,background:s.bodyweight?"#dbeafe":t.card,color:s.bodyweight?"#3b82f6":t.muted,cursor:"pointer"}}>BW</button>
+      <button onClick={onWarmup} style={{height:30,borderRadius:8,border:`1px solid ${s.warmup?"#f59e0b":t.border}`,fontSize:10,fontWeight:700,background:s.warmup?"#fef3c7":t.card,color:s.warmup?"#f59e0b":t.muted,cursor:"pointer"}}>WU</button>
+      <button onClick={onDone} style={{width:30,height:30,borderRadius:"50%",border:"none",background:s.done?"#22c55e":t.border,color:"#fff",fontSize:14,cursor:"pointer",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{s.done?"✓":""}</button>
+      <button onClick={onRemove} style={{background:"none",border:"none",color:t.muted,fontSize:16,cursor:"pointer",textAlign:"center"}}>×</button>
+    </div>
+  );
+};
+
 // ── 1RM Calculator Modal ─────────────────────────────────────────────────────
 function OneRMCalc({t,onClose}){
   const [weight,setWeight]=useState("");
@@ -658,8 +683,6 @@ export default function App(){
     setWv("exercise");
   };
   const updSet=(i,f,v)=>setSets(p=>p.map((s,idx)=>idx===i?{...s,[f]:v}:s));
-  const handleSetInput=(i,f,e)=>{e.currentTarget._val=e.target.value;};
-  const handleSetBlur=(i,f,e)=>{updSet(i,f,e.target.value);};
   const togDone=i=>{setSets(p=>p.map((s,idx)=>idx===i?{...s,done:!s.done}:s));setShowTimer(true);};
   const togBW=i=>setSets(p=>p.map((s,idx)=>idx===i?{...s,bodyweight:!s.bodyweight,weight:""}:s));
   const togWarmup=i=>setSets(p=>p.map((s,idx)=>idx===i?{...s,warmup:!s.warmup}:s));
@@ -787,15 +810,13 @@ export default function App(){
               {["#","Weight","Reps","BW","WU","✓",""].map(h=><div key={h} style={{fontSize:9,fontWeight:700,color:t.muted,textTransform:"uppercase",textAlign:"center"}}>{h}</div>)}
             </div>
             {sets.map((s,i)=>(
-              <div key={i} style={{display:"grid",gridTemplateColumns:"24px 1fr 1fr 36px 36px 36px 24px",gap:4,marginBottom:6,alignItems:"center",background:s.warmup?(t.dark?"#1e293b":"#fef9c3"):s.done?(t.dark?"#14532d":"#f0fdf4"):t.bg,borderRadius:10,padding:"6px 4px",opacity:s.warmup?0.8:1}}>
-                <div style={{textAlign:"center",fontSize:12,fontWeight:700,color:s.warmup?"#f59e0b":t.muted}}>{s.warmup?"W":i+1}</div>
-                <input disabled={s.bodyweight} type="text" inputMode="decimal" placeholder={s.bodyweight?"BW":"0"} defaultValue={s.weight} onChange={e=>handleSetInput(i,"weight",e)} onBlur={e=>handleSetBlur(i,"weight",e)} style={{padding:"6px",borderRadius:8,border:`1px solid ${t.border}`,fontSize:13,textAlign:"center",background:s.bodyweight?(t.dark?"#0f172a":"#f1f5f9"):t.card,color:t.text,outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                <input type="text" inputMode="numeric" placeholder="0" defaultValue={s.reps} onChange={e=>handleSetInput(i,"reps",e)} onBlur={e=>handleSetBlur(i,"reps",e)} style={{padding:"6px",borderRadius:8,border:`1px solid ${t.border}`,fontSize:13,textAlign:"center",background:t.card,color:t.text,outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                <button onClick={()=>togBW(i)} style={{height:30,borderRadius:8,border:`1px solid ${t.border}`,fontSize:10,fontWeight:700,background:s.bodyweight?"#dbeafe":t.card,color:s.bodyweight?"#3b82f6":t.muted,cursor:"pointer"}}>BW</button>
-                <button onClick={()=>togWarmup(i)} style={{height:30,borderRadius:8,border:`1px solid ${s.warmup?"#f59e0b":t.border}`,fontSize:10,fontWeight:700,background:s.warmup?"#fef3c7":t.card,color:s.warmup?"#f59e0b":t.muted,cursor:"pointer"}}>WU</button>
-                <button onClick={()=>togDone(i)} style={{width:30,height:30,borderRadius:"50%",border:"none",background:s.done?"#22c55e":t.border,color:"#fff",fontSize:14,cursor:"pointer",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{s.done?"✓":""}</button>
-                <button onClick={()=>remSet(i)} style={{background:"none",border:"none",color:t.muted,fontSize:16,cursor:"pointer",textAlign:"center"}}>×</button>
-              </div>
+              <SetRow key={i} s={s} i={i} t={t}
+                onWeight={v=>updSet(i,"weight",v)}
+                onReps={v=>updSet(i,"reps",v)}
+                onBW={()=>togBW(i)}
+                onDone={()=>togDone(i)}
+                onWarmup={()=>togWarmup(i)}
+                onRemove={()=>remSet(i)}/>
             ))}
             <button onClick={addSet} style={{width:"100%",marginTop:4,padding:"8px",borderRadius:10,border:`1.5px dashed ${t.border}`,background:"none",color:t.muted,fontWeight:600,fontSize:12,cursor:"pointer"}}>+ Add set</button>
           </div>
