@@ -222,14 +222,14 @@ function RestTimer({onClose,t}){
   );
 }
 
-function SwapPicker({exercises,current,onPick,onClose,t}){
+function SwapPicker({exercises,current,onPick,onClose,t,title="Swap exercise"}){
   const [q,setQ]=useState("");
   const ql=q.trim().toLowerCase();
   return(
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:320}}>
       <div onClick={e=>e.stopPropagation()} style={{background:t.card,borderTopLeftRadius:24,borderTopRightRadius:24,padding:"20px 16px",width:"100%",maxWidth:480,maxHeight:"82vh",display:"flex",flexDirection:"column"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{fontSize:16,fontWeight:800,color:t.text}}>Swap exercise</div>
+          <div style={{fontSize:16,fontWeight:800,color:t.text}}>{title}</div>
           <button onClick={onClose} style={{background:"none",border:"none",color:t.muted,fontSize:22,fontWeight:700,lineHeight:1,cursor:"pointer"}}>×</button>
         </div>
         <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Search exercises…" style={{width:"100%",padding:"10px 14px",borderRadius:12,border:`1px solid ${t.border}`,fontSize:14,color:t.text,background:t.bg,outline:"none",marginBottom:12,boxSizing:"border-box"}}/>
@@ -606,6 +606,7 @@ export default function App(){
   const [workoutStart,setWorkoutStart]=useState(null);
   const [elapsed,setElapsed]=useState(0);
   const [swipeId,setSwipeId]=useState(null);
+  const [showAddEx,setShowAddEx]=useState(false);
   const timerRef=useRef();
 
   useEffect(()=>{save("pt_exercises",exercises);},[exercises]);
@@ -644,6 +645,11 @@ export default function App(){
     if(prev&&prev.sets&&prev.sets.length){setSets(prev.sets.map(s=>({weight:s.weight||"",reps:s.reps||"",bodyweight:s.bodyweight||false,done:false,warmup:false})));}
     else{setSets([initSet(),initSet(),initSet()]);}
   },[activeCat,activeEx,activePlan,log]);
+
+  const addExercise=useCallback((cat,ex)=>{
+    const key=`${cat}||${ex}`;
+    setActivePlan(p=>{if(!p)return p;if(p.exercises.includes(key))return p;return {...p,exercises:[...p.exercises,key]};});
+  },[]);
 
   const updSet=useCallback((i,f,v)=>setSets(p=>p.map((s,idx)=>idx===i?{...s,[f]:v}:s)),[]);
   const togBW=useCallback(i=>setSets(p=>p.map((s,idx)=>idx===i?{...s,bodyweight:!s.bodyweight,weight:""}:s)),[]);
@@ -709,6 +715,8 @@ export default function App(){
               {isSuper&&<div style={{textAlign:"center",fontSize:11,fontWeight:700,color:t.accent,padding:"2px 0",marginBottom:2}}>↕ SUPERSET</div>}
             </div>
           );})}
+          <button onClick={()=>setShowAddEx(true)} style={{width:"100%",marginTop:6,marginBottom:8,padding:"13px",borderRadius:14,border:`1.5px dashed ${t.border}`,background:"none",color:t.accent,fontWeight:700,fontSize:14,cursor:"pointer"}}>+ Add exercise</button>
+          {showAddEx&&<SwapPicker exercises={exercises} current={null} title="Add exercise" t={t} onClose={()=>setShowAddEx(false)} onPick={(cat,ex)=>{setShowAddEx(false);addExercise(cat,ex);}}/>}
           {allDone&&(<div style={{textAlign:"center",marginTop:16,padding:"20px 0"}}><div style={{fontSize:36,marginBottom:8}}>🎉</div><div style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:4}}>Workout complete!</div><div style={{fontSize:15,fontWeight:700,color:t.accent,marginBottom:16}}>{fmtTime(elapsed)}</div><button onClick={()=>{setActivePlan(null);setPlanDone({});setWorkoutStart(null);setWv("list");}} style={{padding:"13px 32px",borderRadius:14,border:"none",background:"#22c55e",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}>Finish ✓</button></div>)}
         </div>
       );
