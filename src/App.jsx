@@ -165,9 +165,38 @@ const SetRow = memo(({s, i, t, onSave, onBW, onDone, onWarmup, onRemove}) => {
 
 // ── Rest Timer ───────────────────────────────────────────────────────────────
 function RestTimer({onClose,t}){
-  const [sec,setSec]=useState(90),[run,setRun]=useState(true),ref=useRef();
-  useEffect(()=>{if(run&&sec>0)ref.current=setTimeout(()=>setSec(s=>s-1),1000);return()=>clearTimeout(ref.current);},[run,sec]);
-  const pct=((90-sec)/90)*100;
+  const [dur,setDur]=useState(90),[sec,setSec]=useState(90),[run,setRun]=useState(true);
+  const endRef=useRef(Date.now()+90000),wakeRef=useRef(null),doneRef=useRef(false);
+  const notify=()=>{
+    try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}
+    try{const Ctx=window.AudioContext||window.webkitAudioContext;if(Ctx){const ac=new Ctx();const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.type="sine";o.frequency.value=880;g.gain.setValueAtTime(0.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.3,ac.currentTime+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+0.6);o.start();o.stop(ac.currentTime+0.6);}}catch(e){}
+  };
+  // Countdown driven by a wall-clock end time so it stays accurate when the
+  // device sleeps or the app is backgrounded (JS timers get throttled/paused).
+  useEffect(()=>{
+    if(!run)return;
+    const tick=()=>{const left=Math.max(0,Math.round((endRef.current-Date.now())/1000));setSec(left);if(left<=0&&!doneRef.current){doneRef.current=true;setRun(false);notify();}};
+    tick();
+    const id=setInterval(tick,250);
+    const onVis=()=>{if(document.visibilityState==="visible")tick();};
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("focus",onVis);
+    return()=>{clearInterval(id);document.removeEventListener("visibilitychange",onVis);window.removeEventListener("focus",onVis);};
+  },[run]);
+  // Hold a screen wake lock while running so the phone doesn't sleep mid-set;
+  // re-acquire it when returning to the app.
+  useEffect(()=>{
+    if(!run)return;
+    let active=true;
+    const request=async()=>{try{if("wakeLock"in navigator){const wl=await navigator.wakeLock.request("screen");if(active)wakeRef.current=wl;else wl.release();}}catch(e){}};
+    request();
+    const onVis=()=>{if(document.visibilityState==="visible"&&active)request();};
+    document.addEventListener("visibilitychange",onVis);
+    return()=>{active=false;document.removeEventListener("visibilitychange",onVis);if(wakeRef.current){wakeRef.current.release().catch(()=>{});wakeRef.current=null;}};
+  },[run]);
+  const start=s=>{setDur(s);doneRef.current=false;endRef.current=Date.now()+s*1000;setSec(s);setRun(true);};
+  const toggle=()=>{if(run){setRun(false);}else{doneRef.current=false;endRef.current=Date.now()+sec*1000;setRun(true);}};
+  const pct=Math.min(100,((dur-sec)/dur)*100);
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
       <div style={{background:t.card,borderRadius:24,padding:32,width:"100%",maxWidth:300,textAlign:"center"}}>
@@ -182,10 +211,10 @@ function RestTimer({onClose,t}){
           </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
-          {[60,90,120].map(s=><button key={s} onClick={()=>{setSec(s);setRun(true);}} style={{padding:"4px 12px",borderRadius:99,background:t.bg,border:`1px solid ${t.border}`,fontSize:12,fontWeight:600,color:t.text,cursor:"pointer"}}>{s}s</button>)}
+          {[60,90,120].map(s=><button key={s} onClick={()=>start(s)} style={{padding:"4px 12px",borderRadius:99,background:s===dur?t.accent:t.bg,border:`1px solid ${s===dur?t.accent:t.border}`,fontSize:12,fontWeight:600,color:s===dur?"#fff":t.text,cursor:"pointer"}}>{s}s</button>)}
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setRun(r=>!r)} style={{flex:1,padding:"10px",borderRadius:12,background:t.bg,border:`1px solid ${t.border}`,fontWeight:700,color:t.text,cursor:"pointer"}}>{run?"Pause":"Resume"}</button>
+          <button onClick={toggle} style={{flex:1,padding:"10px",borderRadius:12,background:t.bg,border:`1px solid ${t.border}`,fontWeight:700,color:t.text,cursor:"pointer"}}>{run?"Pause":"Resume"}</button>
           <button onClick={onClose} style={{flex:1,padding:"10px",borderRadius:12,background:t.accent,border:"none",fontWeight:700,color:"#fff",cursor:"pointer"}}>Done</button>
         </div>
       </div>
