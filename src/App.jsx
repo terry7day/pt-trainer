@@ -222,6 +222,37 @@ function RestTimer({onClose,t}){
   );
 }
 
+function SwapPicker({exercises,current,onPick,onClose,t}){
+  const [q,setQ]=useState("");
+  const ql=q.trim().toLowerCase();
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:320}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:t.card,borderTopLeftRadius:24,borderTopRightRadius:24,padding:"20px 16px",width:"100%",maxWidth:480,maxHeight:"82vh",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:16,fontWeight:800,color:t.text}}>Swap exercise</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:t.muted,fontSize:22,fontWeight:700,lineHeight:1,cursor:"pointer"}}>×</button>
+        </div>
+        <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Search exercises…" style={{width:"100%",padding:"10px 14px",borderRadius:12,border:`1px solid ${t.border}`,fontSize:14,color:t.text,background:t.bg,outline:"none",marginBottom:12,boxSizing:"border-box"}}/>
+        <div style={{overflowY:"auto",flex:1,marginRight:-4,paddingRight:4}}>
+          {SPLIT.map(cat=>{
+            const list=(exercises&&exercises[cat]?exercises[cat]:[]).filter(ex=>!ql||ex.toLowerCase().includes(ql));
+            if(!list.length)return null;
+            const col=CAT_COLORS[cat];
+            return(<div key={cat} style={{marginBottom:14}}>
+              <div style={{fontSize:11,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>{cat}</div>
+              {list.map(ex=>{const isCur=ex===current;return(
+                <button key={ex} disabled={isCur} onClick={()=>onPick(cat,ex)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",padding:"11px 14px",borderRadius:12,border:`1px solid ${isCur?col:t.border}`,background:isCur?col+"18":t.bg,color:isCur?col:t.text,fontSize:14,fontWeight:600,cursor:isCur?"default":"pointer",marginBottom:6}}>
+                  <span>{ex}</span>{isCur&&<span style={{fontSize:11,fontWeight:700}}>Current</span>}
+                </button>);})}
+            </div>);
+          })}
+          {SPLIT.every(cat=>!(exercises&&exercises[cat]?exercises[cat]:[]).filter(ex=>!ql||ex.toLowerCase().includes(ql)).length)&&<div style={{textAlign:"center",color:t.muted,fontSize:13,padding:"24px 0"}}>No matches</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CircleProg({pct,color,size=52,stroke=5}){
   const r=(size-stroke*2)/2,circ=2*Math.PI*r;
   return(<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{transform:"rotate(-90deg)"}}>
@@ -262,12 +293,13 @@ function OneRMCalc({t,onClose}){
 }
 
 // ── Exercise Screen ──────────────────────────────────────────────────────────
-function ExerciseScreen({t, activeCat, activeEx, sets, setSets, activePlan, elapsed, workoutStart, sessionNotes, setSessionNotes, onBack, onSave, showTimer, setShowTimer}){
+function ExerciseScreen({t, activeCat, activeEx, sets, setSets, activePlan, elapsed, workoutStart, sessionNotes, setSessionNotes, onBack, onSave, showTimer, setShowTimer, exercises, onSwap}){
   const pr = (() => {
     const log = load("pt_log",[]);
     const e=log.filter(e=>e.exercise===activeEx);if(!e.length)return null;let b=0;e.forEach(e=>e.sets.forEach(s=>{if(!s.bodyweight&&!s.warmup&&+s.weight>b)b=+s.weight;}));return b>0?b:null;
   })();
   const [showORM,setShowORM]=useState(false);
+  const [showSwap,setShowSwap]=useState(false);
   const [targetReps,setTargetReps]=useState(()=>{const tgt=load("pt_targets",{});return tgt[activeEx]?.reps||"";});
   const [targetSets,setTargetSets]=useState(()=>{const tgt=load("pt_targets",{});return tgt[activeEx]?.sets||"";});
   const info=EXERCISE_INFO[activeEx];
@@ -290,6 +322,7 @@ function ExerciseScreen({t, activeCat, activeEx, sets, setSets, activePlan, elap
           {activePlan?activePlan.name:"Back"}
         </button>
         <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setShowSwap(true)} style={{padding:"5px 10px",borderRadius:99,border:`1px solid ${t.border}`,background:t.bg,fontSize:11,fontWeight:700,color:t.muted,cursor:"pointer"}}>⇄ Swap</button>
           <button onClick={()=>setShowORM(true)} style={{padding:"5px 10px",borderRadius:99,border:`1px solid ${t.border}`,background:t.bg,fontSize:11,fontWeight:700,color:t.muted,cursor:"pointer"}}>1RM</button>
           {workoutStart&&<div style={{padding:"5px 10px",borderRadius:99,background:t.accent+"18",fontSize:11,fontWeight:700,color:t.accent}}>{fmtTime(elapsed)}</div>}
         </div>
@@ -334,6 +367,7 @@ function ExerciseScreen({t, activeCat, activeEx, sets, setSets, activePlan, elap
       </div>
       {showTimer&&<RestTimer onClose={()=>setShowTimer(false)} t={t}/>}
       {showORM&&<OneRMCalc t={t} onClose={()=>setShowORM(false)}/>}
+      {showSwap&&<SwapPicker exercises={exercises} current={activeEx} t={t} onClose={()=>setShowSwap(false)} onPick={(cat,ex)=>{setShowSwap(false);onSwap&&onSwap(cat,ex);}}/>}
     </div>
   );
 }
@@ -359,10 +393,19 @@ function Dashboard({log,t,onGoWorkout,userName}){
         <div><div style={{fontSize:13,color:t.muted,fontWeight:500}}>{greeting()}</div><div style={{fontSize:22,fontWeight:800,color:t.text}}>{userName||"PT Trainer"}</div></div>
         {streak>0&&<div style={{background:t.card,borderRadius:99,padding:"6px 14px",boxShadow:t.dark?"none":"0 1px 4px rgba(0,0,0,0.09)",border:t.dark?`1px solid ${t.border}`:"none",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>🔥</span><span style={{fontSize:13,fontWeight:800,color:"#f97316"}}>{streak} DAY STREAK</span></div>}
       </div>
-      <div style={{fontSize:15,fontWeight:700,color:t.text,marginBottom:8}}>Your Next Workout</div>
-      <div onClick={onGoWorkout} style={{background:t.card,borderRadius:t.radius,padding:"16px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",marginBottom:14,boxShadow:t.dark?"none":"0 1px 4px rgba(0,0,0,0.07)",border:t.dark?`1px solid ${t.border}`:"none"}}>
-        <div><div style={{fontSize:10,fontWeight:700,color:t.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>{SPLIT.join(" / ")}</div><div style={{fontSize:17,fontWeight:800,color:t.text}}>{next}</div></div>
-        <div style={{width:32,height:32,borderRadius:99,background:nc+"22",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={nc} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+      <div onClick={onGoWorkout} style={{background:`linear-gradient(135deg, ${nc} 0%, ${nc}cc 100%)`,borderRadius:t.radius,padding:"20px",marginBottom:14,cursor:"pointer",boxShadow:`0 6px 20px ${nc}55`,position:"relative",overflow:"hidden"}}>
+        <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.85)",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>Your next workout</div>
+        <div style={{fontSize:30,fontWeight:900,color:"#fff",lineHeight:1.05,marginBottom:14}}>{next}</div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+          {SPLIT.map((c,i)=>(<span key={c} style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,background:c===next?"#fff":"rgba(255,255,255,0.2)",color:c===next?nc:"rgba(255,255,255,0.92)"}}>{c}</span>
+            {i<SPLIT.length-1&&<span style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>→</span>}
+          </span>))}
+        </div>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.95)",borderRadius:99,padding:"10px 18px"}}>
+          <span style={{fontSize:14,fontWeight:800,color:nc}}>Start workout</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={nc} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
         <Card style={{marginBottom:0}}><div style={{fontSize:11,fontWeight:700,color:t.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Weight</div><div style={{fontSize:22,fontWeight:800,color:t.text,lineHeight:1}}>{bwLast?`${bwLast}kg`:"—"}</div><div style={{fontSize:11,color:t.muted,marginBottom:8}}>Today</div><Sparkline data={bwLog.slice(-7).map(e=>e.w)} color={t.accent}/></Card>
@@ -584,6 +627,24 @@ export default function App(){
     setWv("exercise");
   },[log]);
 
+  const swapExercise=useCallback((newCat,newEx)=>{
+    const oldKey=`${activeCat}||${activeEx}`,newKey=`${newCat}||${newEx}`;
+    if(activePlan){
+      setActivePlan(p=>{
+        if(!p)return p;
+        const exs=p.exercises.map(k=>k===oldKey?newKey:k);
+        let sup=p.supersets;
+        if(sup&&sup[oldKey]!==undefined){sup={...sup};sup[newKey]=sup[oldKey];delete sup[oldKey];}
+        return {...p,exercises:exs,supersets:sup};
+      });
+      setPlanDone(pd=>{if(pd[oldKey]===undefined)return pd;const n={...pd};n[newKey]=n[oldKey];delete n[oldKey];return n;});
+    }
+    setActiveCat(newCat);setActiveEx(newEx);
+    const prev=log.find(e=>e.exercise===newEx);
+    if(prev&&prev.sets&&prev.sets.length){setSets(prev.sets.map(s=>({weight:s.weight||"",reps:s.reps||"",bodyweight:s.bodyweight||false,done:false,warmup:false})));}
+    else{setSets([initSet(),initSet(),initSet()]);}
+  },[activeCat,activeEx,activePlan,log]);
+
   const updSet=useCallback((i,f,v)=>setSets(p=>p.map((s,idx)=>idx===i?{...s,[f]:v}:s)),[]);
   const togBW=useCallback(i=>setSets(p=>p.map((s,idx)=>idx===i?{...s,bodyweight:!s.bodyweight,weight:""}:s)),[]);
   const togDone=useCallback(i=>{setSets(p=>p.map((s,idx)=>idx===i?{...s,done:!s.done}:s));setShowTimer(true);},[]);
@@ -670,6 +731,8 @@ export default function App(){
           onSave={handleSave}
           showTimer={showTimer}
           setShowTimer={setShowTimer}
+          exercises={exercises}
+          onSwap={swapExercise}
         />
       );
     }
