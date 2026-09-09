@@ -99,6 +99,51 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 const initSet=()=>({weight:"",reps:"",bodyweight:false,done:false,warmup:false});
 const fmtTime=s=>{const m=Math.floor(s/60),sec=s%60;return`${m}:${String(sec).padStart(2,"0")}`;};
 
+// ── Hyrox ────────────────────────────────────────────────────────────────────
+const HYROX_DATE_DEFAULT="2027-01-21";
+const HYROX_BASE=5400; // the model below sums to exactly 1:30:00
+const HYROX_TARGET_OPTS=[4500,4800,5100,5400,5700,6000,6300,6600];
+const HYROX_SEGMENTS=[
+  {k:"run1",type:"run",name:"Run 1",detail:"1 km",base:320},
+  {k:"rox1",type:"rox",name:"RoxZone",detail:"into SkiErg",base:52},
+  {k:"ski",type:"station",name:"SkiErg",detail:"1000 m",base:285,tip:"Long, strong pulls at about 30 s per 100 m. Don't attack the first 200 m — you still have seven runs left."},
+  {k:"run2",type:"run",name:"Run 2",detail:"1 km",base:330},
+  {k:"rox2",type:"rox",name:"RoxZone",detail:"into Sled Push",base:52},
+  {k:"push",type:"station",name:"Sled Push",detail:"50 m · 152 kg",base:195,tip:"Low body angle, arms locked out, short choppy steps. Four lengths — push each one unbroken if the legs allow."},
+  {k:"run3",type:"run",name:"Run 3",detail:"1 km",base:335},
+  {k:"rox3",type:"rox",name:"RoxZone",detail:"into Sled Pull",base:52},
+  {k:"pull",type:"station",name:"Sled Pull",detail:"50 m · 103 kg",base:285,tip:"Sit back, big arm-over-arm pulls, then walk the rope back fast. This is where 90 seconds is won or lost."},
+  {k:"run4",type:"run",name:"Run 4",detail:"1 km",base:340},
+  {k:"rox4",type:"rox",name:"RoxZone",detail:"into Burpees",base:52},
+  {k:"burpee",type:"station",name:"Burpee Broad Jump",detail:"80 m",base:330,tip:"Small consistent jumps and keep breathing. Chest to floor every rep — a no-rep costs you more than a slow rep."},
+  {k:"run5",type:"run",name:"Run 5",detail:"1 km",base:345},
+  {k:"rox5",type:"rox",name:"RoxZone",detail:"into Row",base:52},
+  {k:"row",type:"station",name:"Row",detail:"1000 m",base:285,tip:"Hold about 2:07 per 500 m at a relaxed 24–26 s/m. Use it to bring your heart rate down before Run 6."},
+  {k:"run6",type:"run",name:"Run 6",detail:"1 km",base:355},
+  {k:"rox6",type:"rox",name:"RoxZone",detail:"into Farmers Carry",base:53},
+  {k:"farmer",type:"station",name:"Farmers Carry",detail:"200 m · 2 × 24 kg",base:150,tip:"Fastest station on the floor — go unbroken. Grip high, shoulders back, quick short steps."},
+  {k:"run7",type:"run",name:"Run 7",detail:"1 km",base:365},
+  {k:"rox7",type:"rox",name:"RoxZone",detail:"into Lunges",base:53},
+  {k:"lunge",type:"station",name:"Sandbag Lunges",detail:"100 m · 20 kg",base:285,tip:"Back knee must touch the floor. Bag high on the shoulders, and break at the turns rather than mid-length."},
+  {k:"run8",type:"run",name:"Run 8",detail:"1 km",base:370},
+  {k:"rox8",type:"rox",name:"RoxZone",detail:"into Wall Balls",base:54},
+  {k:"wall",type:"station",name:"Wall Balls",detail:"100 reps · 6 kg @ 3 m",base:405,tip:"Sets of 10 with a 5 s break beats sets of 25 then dying. That is roughly 4 s a rep — hips below knees, ball hits the target."},
+];
+const HYROX_SEGMENTS_SIMPLE=(()=>{const out=[];let carry=0;HYROX_SEGMENTS.forEach(s=>{if(s.type==="rox"){carry+=s.base;return;}out.push({...s,base:s.base+carry,rox:carry>0});carry=0;});return out;})();
+const HYROX_STATIONS=HYROX_SEGMENTS.filter(s=>s.type==="station");
+const HYROX_LABEL=HYROX_SEGMENTS.reduce((a,s)=>{a[s.k]=s.name;return a;},{});
+const HYROX_TYPE=HYROX_SEGMENTS.reduce((a,s)=>{a[s.k]=s.type;return a;},{});
+const HYROX_COL={run:"#3b82f6",station:"#f97316",rox:"#94a3b8"};
+
+function hyroxPlan(target,simple){
+  const segs=simple?HYROX_SEGMENTS_SIMPLE:HYROX_SEGMENTS;
+  let acc=0,prev=0;const scale=target/HYROX_BASE;
+  return segs.map(s=>{acc+=s.base*scale;const cum=Math.round(acc);const secs=cum-prev;prev=cum;return{...s,secs,cum};});
+}
+const fmtHMS=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}`:`${m}:${String(x).padStart(2,"0")}`;};
+const fmtDelta=d=>{const r=Math.round(d);return(r>0?"+":r<0?"−":"")+fmtTime(Math.abs(r));};
+const parseMS=str=>{const s=String(str).trim();if(!s)return null;if(s.includes(":")){const p=s.split(":").map(x=>parseInt(x,10));if(p.some(isNaN))return null;return p.length===3?p[0]*3600+p[1]*60+p[2]:p[0]*60+p[1];}const n=parseFloat(s);return isNaN(n)?null:Math.round(n);};
+
 function useTheme(){
   const [dark,setDark]=useState(()=>load("pt_dark",false));
   useEffect(()=>{save("pt_dark",dark);},[dark]);
@@ -588,6 +633,278 @@ function Planner({exercises,setExercises,t}){
 }
 
 // ── Main App ─────────────────────────────────────────────────────────────────
+// ── Hyrox race mode ──────────────────────────────────────────────────────────
+function Hyrox({t}){
+  const Card=mkCard(t),Back=mkBack(t);
+  const [view,setView]=useState("menu");
+  const [target,setTarget]=useState(()=>load("pt_hyrox_target",5400));
+  const [raceDate,setRaceDate]=useState(()=>load("pt_hyrox_date",HYROX_DATE_DEFAULT));
+  const [simple,setSimple]=useState(()=>load("pt_hyrox_simple",true));
+  const [races,setRaces]=useState(()=>load("pt_hyrox_races",[]));
+  const [stationLog,setStationLog]=useState(()=>load("pt_hyrox_stations",[]));
+  const [race,setRace]=useState(()=>load("pt_hyrox_active",null));
+  const [now,setNow]=useState(Date.now());
+  const [openId,setOpenId]=useState(null);
+  const [stKey,setStKey]=useState("ski");
+  const [stVal,setStVal]=useState("");
+
+  useEffect(()=>{save("pt_hyrox_target",target);},[target]);
+  useEffect(()=>{save("pt_hyrox_date",raceDate);},[raceDate]);
+  useEffect(()=>{save("pt_hyrox_simple",simple);},[simple]);
+  useEffect(()=>{save("pt_hyrox_races",races);},[races]);
+  useEffect(()=>{save("pt_hyrox_stations",stationLog);},[stationLog]);
+  useEffect(()=>{if(race)save("pt_hyrox_active",race);else{try{localStorage.removeItem("pt_hyrox_active");}catch{}}},[race]);
+  useEffect(()=>{if(!race)return;const id=setInterval(()=>setNow(Date.now()),250);return()=>clearInterval(id);},[race]);
+  useEffect(()=>{if(race&&view!=="race")setView("race");},[]);
+
+  const planFull=hyroxPlan(target,false);
+  const planLive=hyroxPlan(target,simple);
+  const daysOut=Math.ceil((new Date(raceDate+"T09:00:00").getTime()-Date.now())/86400000);
+  const runTot=HYROX_SEGMENTS.filter(s=>s.type==="run").reduce((a,s)=>a+s.base,0)*target/HYROX_BASE;
+  const stTot=HYROX_SEGMENTS.filter(s=>s.type==="station").reduce((a,s)=>a+s.base,0)*target/HYROX_BASE;
+  const roxTot=HYROX_SEGMENTS.filter(s=>s.type==="rox").reduce((a,s)=>a+s.base,0)*target/HYROX_BASE;
+
+  const bestFor=k=>{let b=null;races.forEach(r=>(r.splits||[]).forEach(s=>{if(s.k===k&&(b===null||s.secs<b))b=s.secs;}));stationLog.forEach(s=>{if(s.k===k&&(b===null||s.secs<b))b=s.secs;});return b;};
+
+  // live race maths
+  const idx=race?race.splits.length:0;
+  const doneSecs=race?race.splits.reduce((a,s)=>a+s.secs,0):0;
+  const elapsed=race?(now-race.start)/1000:0;
+  const segEl=Math.max(0,elapsed-doneSecs);
+  const cur=race?planLive[Math.min(idx,planLive.length-1)]:null;
+  const planDone=idx>0?planLive[idx-1].cum:0;
+  const cumDelta=doneSecs-planDone;
+
+  const startRace=()=>{setRace({start:Date.now(),splits:[]});setView("race");};
+  const nextSeg=()=>{
+    if(!race)return;
+    const el=(Date.now()-race.start)/1000;
+    const done=race.splits.reduce((a,s)=>a+s.secs,0);
+    const secs=Math.max(1,Math.round(el-done));
+    const splits=[...race.splits,{k:cur.k,secs}];
+    if(splits.length>=planLive.length){
+      const total=splits.reduce((a,s)=>a+s.secs,0);
+      const entry={id:Date.now(),date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),target,total,simple,splits};
+      setRaces(p=>[entry,...p]);setRace(null);setOpenId(entry.id);setView("history");
+    }else setRace(r=>({...r,splits}));
+  };
+  const undoSeg=()=>setRace(r=>r&&r.splits.length?{...r,splits:r.splits.slice(0,-1)}:r);
+  const addStation=()=>{const s=parseMS(stVal);if(!s||s<=0)return;setStationLog(p=>[{id:Date.now(),date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short"}),k:stKey,secs:s},...p]);setStVal("");};
+
+  const H=({title,sub})=>(<div style={{paddingTop:16,paddingBottom:14}}><div style={{fontSize:22,fontWeight:800,color:t.text}}>{title}</div>{sub&&<div style={{fontSize:13,color:t.muted,marginTop:2}}>{sub}</div>}</div>);
+  const wrap={padding:"0 16px 100px",maxWidth:480,margin:"0 auto"};
+
+  // ── live race ──────────────────────────────────────────────────────────────
+  if(view==="race"&&race){
+    const over=segEl>cur.secs;
+    return(
+      <div style={wrap}>
+        <Back onClick={()=>setView("menu")} label="Hyrox"/>
+        <div style={{paddingTop:4,textAlign:"center"}}>
+          <div style={{fontSize:11,fontWeight:700,color:t.muted,letterSpacing:1,textTransform:"uppercase"}}>Elapsed</div>
+          <div style={{fontSize:46,fontWeight:800,color:t.text,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{fmtHMS(elapsed)}</div>
+          <div style={{display:"inline-block",marginTop:8,padding:"5px 14px",borderRadius:99,background:(cumDelta<=0?"#22c55e":"#ef4444")+"1e",color:cumDelta<=0?"#22c55e":"#ef4444",fontSize:13,fontWeight:800}}>
+            {idx===0?`Target ${fmtHMS(target)}`:`${fmtDelta(cumDelta)} vs plan`}
+          </div>
+        </div>
+
+        <div style={{background:t.card,borderRadius:t.radius,padding:"18px 16px",margin:"16px 0 10px",border:`2px solid ${HYROX_COL[cur.type]}`,textAlign:"center"}}>
+          <div style={{fontSize:11,fontWeight:700,color:HYROX_COL[cur.type],letterSpacing:1,textTransform:"uppercase"}}>Now · {idx+1} of {planLive.length}</div>
+          <div style={{fontSize:24,fontWeight:800,color:t.text,marginTop:4}}>{cur.name}</div>
+          <div style={{fontSize:12,color:t.muted,marginTop:2}}>{cur.detail}{cur.rox?" · incl. RoxZone":""}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:14}}>
+            <div><div style={{fontSize:10,color:t.muted,fontWeight:700}}>SPLIT</div><div style={{fontSize:26,fontWeight:800,color:over?"#ef4444":t.text,fontVariantNumeric:"tabular-nums"}}>{fmtTime(Math.round(segEl))}</div></div>
+            <div><div style={{fontSize:10,color:t.muted,fontWeight:700}}>TARGET</div><div style={{fontSize:26,fontWeight:800,color:t.muted,fontVariantNumeric:"tabular-nums"}}>{fmtTime(cur.secs)}</div></div>
+          </div>
+          <div style={{height:6,borderRadius:99,background:t.border,marginTop:14,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(segEl/cur.secs)*100)}%`,background:over?"#ef4444":HYROX_COL[cur.type],borderRadius:99}}/></div>
+        </div>
+
+        <button onClick={nextSeg} style={{width:"100%",padding:"20px",borderRadius:16,border:"none",background:idx===planLive.length-1?"#22c55e":t.accent,color:"#fff",fontWeight:800,fontSize:19,cursor:"pointer",marginBottom:8}}>
+          {idx===planLive.length-1?"Finish ✓":`Done · next ${planLive[idx+1].name}`}
+        </button>
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          <button onClick={undoSeg} disabled={!race.splits.length} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,background:t.card,color:race.splits.length?t.text:t.muted,fontWeight:700,fontSize:13,cursor:"pointer"}}>↩ Undo split</button>
+          <button onClick={()=>{if(window.confirm("Abandon this race? Splits will be lost."))  {setRace(null);setView("menu");}}} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,background:t.card,color:"#ef4444",fontWeight:700,fontSize:13,cursor:"pointer"}}>Abandon</button>
+        </div>
+
+        {race.splits.length>0&&<div style={{fontSize:12,fontWeight:800,color:t.muted,marginBottom:6,letterSpacing:0.5}}>SPLITS</div>}
+        {race.splits.map((s,i)=>{const p=planLive[i],d=s.secs-p.secs;return(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:t.card,borderRadius:12,marginBottom:5,border:t.dark?`1px solid ${t.border}`:"none"}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:HYROX_COL[p.type],flexShrink:0}}/>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:t.text}}>{p.name}</div>
+            <div style={{fontSize:13,fontWeight:800,color:t.text,fontVariantNumeric:"tabular-nums"}}>{fmtTime(s.secs)}</div>
+            <div style={{fontSize:12,fontWeight:800,color:d<=0?"#22c55e":"#ef4444",width:48,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{fmtDelta(d)}</div>
+          </div>
+        );})}
+      </div>
+    );
+  }
+
+  // ── pacing guide ───────────────────────────────────────────────────────────
+  if(view==="guide")return(
+    <div style={wrap}>
+      <Back onClick={()=>setView("menu")} label="Hyrox"/>
+      <H title="Race pacing guide" sub={`Target ${fmtHMS(target)} · Open division`}/>
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",textAlign:"center"}}>
+          {[["Running",runTot,"8 × 1 km"],["Stations",stTot,"8 stations"],["RoxZone",roxTot,"transitions"]].map(([l,v,s])=>(
+            <div key={l} style={{flex:1}}>
+              <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:"uppercase",letterSpacing:0.5}}>{l}</div>
+              <div style={{fontSize:19,fontWeight:800,color:t.text,marginTop:2,fontVariantNumeric:"tabular-nums"}}>{fmtHMS(v)}</div>
+              <div style={{fontSize:10,color:t.muted}}>{s}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <div style={{fontSize:12,color:t.muted,marginBottom:10,lineHeight:1.5}}>
+        Runs deliberately fade from {fmtTime(planFull[0].secs)} to {fmtTime(planFull[21].secs)} per km — everyone's last run is slower than their first, and a flat pace just means blowing up at station six. The <b>clock</b> column is where the race timer should read as you finish each segment.
+      </div>
+      {planFull.map(s=>{
+        const b=s.type==="station"?bestFor(s.k):null;
+        return(
+        <div key={s.k} style={{background:s.type==="rox"?"none":t.card,borderRadius:12,padding:s.type==="rox"?"3px 12px":"12px 14px",marginBottom:s.type==="rox"?2:6,border:s.type==="rox"?"none":(t.dark?`1px solid ${t.border}`:"none"),boxShadow:s.type==="rox"||t.dark?"none":"0 1px 3px rgba(0,0,0,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {s.type!=="rox"&&<div style={{width:8,height:8,borderRadius:"50%",background:HYROX_COL[s.type],flexShrink:0}}/>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:s.type==="rox"?11:15,fontWeight:s.type==="rox"?600:800,color:s.type==="rox"?t.muted:t.text}}>{s.type==="rox"?`↕ ${s.name} ${s.detail}`:s.name}</div>
+              {s.type!=="rox"&&<div style={{fontSize:11,color:t.muted,marginTop:1}}>{s.detail}{b?` · your best ${fmtTime(b)}`:""}</div>}
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:s.type==="rox"?11:16,fontWeight:800,color:s.type==="rox"?t.muted:t.text,fontVariantNumeric:"tabular-nums"}}>{fmtTime(s.secs)}</div>
+              {s.type!=="rox"&&<div style={{fontSize:11,color:t.accent,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmtHMS(s.cum)}</div>}
+            </div>
+          </div>
+          {s.tip&&<div style={{fontSize:12,color:t.muted,marginTop:8,paddingTop:8,borderTop:`1px solid ${t.border}`,lineHeight:1.5}}>{s.tip}</div>}
+        </div>
+      );})}
+      <div style={{background:t.accent+"14",borderRadius:12,padding:"14px",marginTop:10}}>
+        <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:4}}>Finish</div>
+        <div style={{fontSize:26,fontWeight:800,color:t.accent,fontVariantNumeric:"tabular-nums"}}>{fmtHMS(target)}</div>
+      </div>
+    </div>
+  );
+
+  // ── history ────────────────────────────────────────────────────────────────
+  if(view==="history")return(
+    <div style={wrap}>
+      <Back onClick={()=>setView("menu")} label="Hyrox"/>
+      <H title="Race history" sub={races.length?`${races.length} recorded`:"Nothing recorded yet"}/>
+      {races.length===0&&<div style={{textAlign:"center",color:t.muted,marginTop:50,fontSize:14}}>Run a practice race and your splits will show up here.</div>}
+      {races.map(r=>{const d=r.total-r.target,open=openId===r.id;const p=hyroxPlan(r.target,r.simple!==false);return(
+        <div key={r.id} style={{background:t.card,borderRadius:t.radius,padding:"14px 16px",marginBottom:10,border:t.dark?`1px solid ${t.border}`:"none",boxShadow:t.dark?"none":"0 1px 4px rgba(0,0,0,0.07)"}}>
+          <div onClick={()=>setOpenId(open?null:r.id)} style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:20,fontWeight:800,color:t.text,fontVariantNumeric:"tabular-nums"}}>{fmtHMS(r.total)}</div>
+              <div style={{fontSize:11,color:t.muted,marginTop:1}}>{r.date} · target {fmtHMS(r.target)}</div>
+            </div>
+            <div style={{padding:"4px 11px",borderRadius:99,background:(d<=0?"#22c55e":"#ef4444")+"1e",color:d<=0?"#22c55e":"#ef4444",fontSize:12,fontWeight:800}}>{fmtDelta(d)}</div>
+            <div style={{fontSize:12,color:t.muted}}>{open?"▲":"▼"}</div>
+          </div>
+          {open&&<div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${t.border}`}}>
+            {(r.splits||[]).map((s,i)=>{const pl=p[i],sd=pl?s.secs-pl.secs:0;return(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:HYROX_COL[HYROX_TYPE[s.k]||"station"],flexShrink:0}}/>
+                <div style={{flex:1,fontSize:12,color:t.text,fontWeight:600}}>{HYROX_LABEL[s.k]||s.k}</div>
+                <div style={{fontSize:12,fontWeight:800,color:t.text,fontVariantNumeric:"tabular-nums"}}>{fmtTime(s.secs)}</div>
+                <div style={{fontSize:11,fontWeight:700,color:sd<=0?"#22c55e":"#ef4444",width:46,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{pl?fmtDelta(sd):""}</div>
+              </div>
+            );})}
+            <button onClick={()=>{if(window.confirm("Delete this race?")){setRaces(x=>x.filter(y=>y.id!==r.id));setOpenId(null);}}} style={{background:"none",border:"none",color:"#ef4444",fontSize:12,fontWeight:700,cursor:"pointer",padding:"8px 0 0"}}>Delete race</button>
+          </div>}
+        </div>
+      );})}
+    </div>
+  );
+
+  // ── station log ────────────────────────────────────────────────────────────
+  if(view==="stations")return(
+    <div style={wrap}>
+      <Back onClick={()=>setView("menu")} label="Hyrox"/>
+      <H title="Station times" sub="Log single stations from training"/>
+      <Card>
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
+          <select value={stKey} onChange={e=>setStKey(e.target.value)} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,fontSize:14,background:t.bg,color:t.text,outline:"none",fontFamily:"inherit"}}>
+            {HYROX_STATIONS.map(s=><option key={s.k} value={s.k}>{s.name}</option>)}
+          </select>
+          <input value={stVal} onChange={e=>setStVal(e.target.value)} placeholder="mm:ss" inputMode="numeric" style={{width:92,padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,fontSize:14,textAlign:"center",background:t.bg,color:t.text,outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        <button onClick={addStation} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:t.accent,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add time</button>
+      </Card>
+      <div style={{fontSize:12,fontWeight:800,color:t.muted,margin:"14px 0 8px",letterSpacing:0.5}}>YOUR BEST vs RACE TARGET</div>
+      {HYROX_STATIONS.map(s=>{const b=bestFor(s.k),tg=planFull.find(x=>x.k===s.k).secs,d=b!==null?b-tg:null;return(
+        <div key={s.k} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:t.card,borderRadius:12,marginBottom:5,border:t.dark?`1px solid ${t.border}`:"none"}}>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:t.text}}>{s.name}</div><div style={{fontSize:11,color:t.muted}}>target {fmtTime(tg)}</div></div>
+          <div style={{fontSize:15,fontWeight:800,color:b===null?t.muted:t.text,fontVariantNumeric:"tabular-nums"}}>{b===null?"—":fmtTime(b)}</div>
+          {d!==null&&<div style={{fontSize:12,fontWeight:800,color:d<=0?"#22c55e":"#ef4444",width:46,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{fmtDelta(d)}</div>}
+        </div>
+      );})}
+      {stationLog.length>0&&<>
+        <div style={{fontSize:12,fontWeight:800,color:t.muted,margin:"18px 0 8px",letterSpacing:0.5}}>LOGGED</div>
+        {stationLog.map(s=>(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",background:t.card,borderRadius:12,marginBottom:5,border:t.dark?`1px solid ${t.border}`:"none"}}>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:t.text}}>{HYROX_LABEL[s.k]}<span style={{fontSize:11,color:t.muted,fontWeight:500}}> · {s.date}</span></div>
+            <div style={{fontSize:14,fontWeight:800,color:t.text,fontVariantNumeric:"tabular-nums"}}>{fmtTime(s.secs)}</div>
+            <button onClick={()=>setStationLog(p=>p.filter(x=>x.id!==s.id))} style={{background:"none",border:"none",color:t.muted,fontSize:17,cursor:"pointer",padding:0}}>×</button>
+          </div>
+        ))}
+      </>}
+    </div>
+  );
+
+  // ── menu ───────────────────────────────────────────────────────────────────
+  const pb=races.length?Math.min(...races.map(r=>r.total)):null;
+  return(
+    <div style={wrap}>
+      <H title="Hyrox" sub="Open division · 8 × 1 km + 8 stations"/>
+      <div style={{background:`linear-gradient(135deg,${t.accent},#1d4ed8)`,borderRadius:t.radius,padding:"20px",marginBottom:10,color:"#fff"}}>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",opacity:0.85}}>Race day</div>
+        <div style={{fontSize:34,fontWeight:800,lineHeight:1.15,marginTop:2}}>{daysOut>0?`${daysOut} days`:daysOut===0?"Today":`${Math.abs(daysOut)} days ago`}</div>
+        <div style={{fontSize:13,opacity:0.9,marginTop:2}}>{new Date(raceDate+"T09:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+        <div style={{display:"flex",gap:18,marginTop:16,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.25)"}}>
+          <div><div style={{fontSize:10,opacity:0.85,fontWeight:700}}>TARGET</div><div style={{fontSize:20,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{fmtHMS(target)}</div></div>
+          <div><div style={{fontSize:10,opacity:0.85,fontWeight:700}}>BEST</div><div style={{fontSize:20,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{pb===null?"—":fmtHMS(pb)}</div></div>
+          <div><div style={{fontSize:10,opacity:0.85,fontWeight:700}}>AVG KM</div><div style={{fontSize:20,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{fmtTime(Math.round(runTot/8))}</div></div>
+        </div>
+      </div>
+
+      {race&&<button onClick={()=>setView("race")} style={{width:"100%",padding:"16px",borderRadius:14,border:"none",background:"#22c55e",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:10}}>▶ Resume race in progress</button>}
+      {!race&&<button onClick={startRace} style={{width:"100%",padding:"17px",borderRadius:14,border:"none",background:t.accent,color:"#fff",fontWeight:800,fontSize:17,cursor:"pointer",marginBottom:10}}>Start race</button>}
+
+      {[["Race pacing guide","Every split and the clock to hit","guide"],["Race history",races.length?`${races.length} race${races.length>1?"s":""} recorded`:"No races yet","history"],["Station times","Log and compare single stations","stations"]].map(([a,b,v])=>(
+        <Card key={v} onClick={()=>setView(v)}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{flex:1}}><div style={{fontSize:15,fontWeight:800,color:t.text}}>{a}</div><div style={{fontSize:12,color:t.muted,marginTop:1}}>{b}</div></div>
+            <div style={{color:t.muted,fontSize:18}}>›</div>
+          </div>
+        </Card>
+      ))}
+
+      <div style={{fontSize:12,fontWeight:800,color:t.muted,margin:"18px 0 8px",letterSpacing:0.5}}>SETTINGS</div>
+      <Card>
+        <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:8}}>Target finish time</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {HYROX_TARGET_OPTS.map(v=>(
+            <button key={v} onClick={()=>setTarget(v)} style={{padding:"8px 13px",borderRadius:10,border:`1px solid ${target===v?t.accent:t.border}`,background:target===v?t.accent:t.card,color:target===v?"#fff":t.text,fontSize:13,fontWeight:700,cursor:"pointer",fontVariantNumeric:"tabular-nums"}}>{fmtHMS(v)}</button>
+          ))}
+        </div>
+        <div style={{fontSize:11,color:t.muted,marginTop:8,lineHeight:1.5}}>All splits scale from the 1:30 model, keeping the same balance between running, stations and RoxZone.</div>
+      </Card>
+      <Card>
+        <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:8}}>Race date</div>
+        <input type="date" value={raceDate} onChange={e=>setRaceDate(e.target.value)} style={{width:"100%",padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,fontSize:14,background:t.bg,color:t.text,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+      </Card>
+      <Card>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:t.text}}>Split RoxZone separately</div><div style={{fontSize:11,color:t.muted,marginTop:2,lineHeight:1.5}}>{simple?"16 taps — transition time counts with the station":"24 taps — transitions timed on their own"}</div></div>
+          <button onClick={()=>setSimple(s=>!s)} disabled={!!race} style={{width:48,height:28,borderRadius:99,border:"none",background:!simple?t.accent:t.border,cursor:race?"not-allowed":"pointer",position:"relative",flexShrink:0,opacity:race?0.5:1}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:!simple?23:3,transition:"left 0.2s"}}/>
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export default function App(){
   const [theme,toggleDark]=useTheme();const t=theme;
   const [tab,setTab]=useState("dashboard");
@@ -806,6 +1123,7 @@ export default function App(){
     {id:"home",label:"Workout",icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?t.accent:"#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4v16M18 4v16M6 12h12M2 7h4M18 7h4M2 17h4M18 17h4"/></svg>},
     {id:"planner",label:"Planner",icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?t.accent:"#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14" strokeWidth="3"/><line x1="12" y1="14" x2="12.01" y2="14" strokeWidth="3"/><line x1="16" y1="14" x2="16.01" y2="14" strokeWidth="3"/></svg>},
     {id:"log",label:"Log",icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?t.accent:"#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>},
+    {id:"hyrox",label:"Hyrox",icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?t.accent:"#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>},
     {id:"more",label:"More",icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?t.accent:"#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>},
   ];
 
@@ -816,6 +1134,7 @@ export default function App(){
         {tab==="home"&&renderWorkout()}
         {tab==="planner"&&<Planner exercises={exercises} setExercises={setExercises} t={t}/>}
         {tab==="log"&&renderLog()}
+        {tab==="hyrox"&&<Hyrox t={t}/>}
         {tab==="more"&&<MoreTab t={t} toggleDark={toggleDark} log={log} userName={userName} setUserName={setUserName}/>}
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:t.dark?"rgba(15,23,42,0.97)":"rgba(255,255,255,0.95)",backdropFilter:"blur(12px)",borderTop:`1px solid ${t.border}`,display:"flex",zIndex:50,paddingBottom:"env(safe-area-inset-bottom)"}}>
