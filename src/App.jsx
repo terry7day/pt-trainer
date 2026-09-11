@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, memo, useCallback } from "react";
 
 const SPLIT = ["Push", "Pull", "Legs", "Arms & Shoulders"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -635,7 +635,7 @@ function Planner({exercises,setExercises,t}){
 // ── Main App ─────────────────────────────────────────────────────────────────
 // ── Hyrox race mode ──────────────────────────────────────────────────────────
 function Hyrox({t}){
-  const Card=mkCard(t),Back=mkBack(t);
+  const Card=useMemo(()=>mkCard(t),[t]),Back=useMemo(()=>mkBack(t),[t]);
   const [view,setView]=useState("menu");
   const [target,setTarget]=useState(()=>load("pt_hyrox_target",5400));
   const [raceDate,setRaceDate]=useState(()=>load("pt_hyrox_date",HYROX_DATE_DEFAULT));
@@ -675,9 +675,13 @@ function Hyrox({t}){
   const planDone=idx>0?planLive[idx-1].cum:0;
   const cumDelta=doneSecs-planDone;
 
-  const startRace=()=>{setRace({start:Date.now(),splits:[]});setView("race");};
+  const lastTap=useRef(0);
+  const startRace=()=>{lastTap.current=Date.now();setRace({start:Date.now(),splits:[]});setView("race");};
   const nextSeg=()=>{
     if(!race)return;
+    const tapAt=Date.now();
+    if(tapAt-lastTap.current<400)return;
+    lastTap.current=tapAt;
     const el=(Date.now()-race.start)/1000;
     const done=race.splits.reduce((a,s)=>a+s.secs,0);
     const secs=Math.max(1,Math.round(el-done));
@@ -691,7 +695,7 @@ function Hyrox({t}){
   const undoSeg=()=>setRace(r=>r&&r.splits.length?{...r,splits:r.splits.slice(0,-1)}:r);
   const addStation=()=>{const s=parseMS(stVal);if(!s||s<=0)return;setStationLog(p=>[{id:Date.now(),date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short"}),k:stKey,secs:s},...p]);setStVal("");};
 
-  const H=({title,sub})=>(<div style={{paddingTop:16,paddingBottom:14}}><div style={{fontSize:22,fontWeight:800,color:t.text}}>{title}</div>{sub&&<div style={{fontSize:13,color:t.muted,marginTop:2}}>{sub}</div>}</div>);
+  const H=useMemo(()=>({title,sub})=>(<div style={{paddingTop:16,paddingBottom:14}}><div style={{fontSize:22,fontWeight:800,color:t.text}}>{title}</div>{sub&&<div style={{fontSize:13,color:t.muted,marginTop:2}}>{sub}</div>}</div>),[t]);
   const wrap={padding:"0 16px 100px",maxWidth:480,margin:"0 auto"};
 
   // ── live race ──────────────────────────────────────────────────────────────
@@ -719,12 +723,12 @@ function Hyrox({t}){
           <div style={{height:6,borderRadius:99,background:t.border,marginTop:14,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(segEl/cur.secs)*100)}%`,background:over?"#ef4444":HYROX_COL[cur.type],borderRadius:99}}/></div>
         </div>
 
-        <button onClick={nextSeg} style={{width:"100%",padding:"20px",borderRadius:16,border:"none",background:idx===planLive.length-1?"#22c55e":t.accent,color:"#fff",fontWeight:800,fontSize:19,cursor:"pointer",marginBottom:8}}>
+        <button onPointerDown={e=>{if(e.button===0)nextSeg();}} onClick={nextSeg} style={{width:"100%",padding:"20px",borderRadius:16,border:"none",background:idx===planLive.length-1?"#22c55e":t.accent,color:"#fff",fontWeight:800,fontSize:19,cursor:"pointer",marginBottom:8,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",userSelect:"none",WebkitUserSelect:"none"}}>
           {idx===planLive.length-1?"Finish ✓":`Done · next ${planLive[idx+1].name}`}
         </button>
         <div style={{display:"flex",gap:8,marginBottom:16}}>
-          <button onClick={undoSeg} disabled={!race.splits.length} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,background:t.card,color:race.splits.length?t.text:t.muted,fontWeight:700,fontSize:13,cursor:"pointer"}}>↩ Undo split</button>
-          <button onClick={()=>{if(window.confirm("Abandon this race? Splits will be lost."))  {setRace(null);setView("menu");}}} style={{flex:1,padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,background:t.card,color:"#ef4444",fontWeight:700,fontSize:13,cursor:"pointer"}}>Abandon</button>
+          <button onClick={undoSeg} disabled={!race.splits.length} style={{flex:1,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,background:t.card,color:race.splits.length?t.text:t.muted,fontWeight:700,fontSize:13,cursor:"pointer"}}>↩ Undo split</button>
+          <button onClick={()=>{if(window.confirm("Abandon this race? Splits will be lost."))  {setRace(null);setView("menu");}}} style={{flex:1,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",padding:"11px",borderRadius:12,border:`1px solid ${t.border}`,background:t.card,color:"#ef4444",fontWeight:700,fontSize:13,cursor:"pointer"}}>Abandon</button>
         </div>
 
         {race.splits.length>0&&<div style={{fontSize:12,fontWeight:800,color:t.muted,marginBottom:6,letterSpacing:0.5}}>SPLITS</div>}
